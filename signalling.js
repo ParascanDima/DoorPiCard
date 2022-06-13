@@ -1,5 +1,5 @@
 export default class Signal {
-    constructor(url, stream, onStream, onError, onClose, onMessage) {
+    constructor(url, /*stream, onStream,*/ onError, onClose, onMessage) {
         if (!"WebSocket" in window) {
             onError("Sorry, this browser does not support Web Sockets. Bye.");
             return;
@@ -9,8 +9,49 @@ export default class Signal {
         RTCSessionDescription = window.RTCSessionDescription;
         RTCIceCandidate = window.RTCIceCandidate;
 
+        /* First we create a peer connection */
+        this.pc = new RTCPeerConnection(
+            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+            {optional: []}
+        );
+
+        //this.localStream = stream;
+        this.localStream = null;
+        this.ws = Signal.initWebSocket(url, this.pc, /*stream, onStream,*/ onError, onClose, onMessage);
+    }
+
+    call(stream, onStream) {
+
         this.localStream = stream;
-        this.ws = Signal.initWebSocket(url, stream, onStream, onError, onClose, onMessage);
+
+        if ('ontrack' in this.pc) {
+            this.pc.ontrack = (event) => {
+                onStream(event.streams[0]);
+            };
+        } else {  // onaddstream() deprecated
+            this.pc.onaddstream = (event) => {
+                onStream(event.stream);
+            };
+        }
+
+        this.pc.onremovestream = (event) => console.log("the stream has been removed: do your stuff now");
+        this.pc.ondatachannel =  (event) => console.log("a data channel is available: do your stuff with it");
+
+        if (stream) {
+            this.pc.addStream(stream);
+        }
+
+        /* kindly signal the remote peer that we would like to initiate a call */
+        const request = {
+            what: "call",
+            options: {
+                force_hw_vcodec: false,
+                vformat: 30, /* 30=640x480, 30 fps */
+                trickle_ice: true
+            }
+        };
+        console.log("send message " + JSON.stringify(request));
+        this.ws.send(JSON.stringify(request));
     }
 
     hangup() {
@@ -20,7 +61,7 @@ export default class Signal {
             };
             console.log("send message " + JSON.stringify(request));
             this.ws.send(JSON.stringify(request));
-            this.ws.close();
+            //this.ws.close();
         }
         if (this.localStream) {
             try {
@@ -38,17 +79,16 @@ export default class Signal {
     };
 
 
-    static initWebSocket(url, stream, onStream, onError, onClose, onMessage) {
+    static initWebSocket(url, rtcPeerConnection, /*stream, onStream,*/ onError, onClose, onMessage) {
         console.log("opening web socket: " + url);
         let ws = new WebSocket(url);
-        let pc;
         let iceCandidates = [];
         let hasRemoteDesc = false;
 
         const addIceCandidates = () => {
             if (hasRemoteDesc) {
                 iceCandidates.forEach((candidate) => {
-                    pc.addIceCandidate(candidate,
+                    rtcPeerConnection.addIceCandidate(candidate,
                         function () {
                             console.log("IceCandidate added: " + JSON.stringify(candidate));
                         },
@@ -62,14 +102,10 @@ export default class Signal {
         }
 
         ws.onopen = () => {
-            /* First we create a peer connection */
-            const config = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]};
-            const options = {optional: []};
-            pc = new RTCPeerConnection(config, options);
             iceCandidates = [];
             hasRemoteDesc = false;
 
-            pc.onicecandidate = (event) => {
+            rtcPeerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     const candidate = {
                         sdpMLineIndex: event.candidate.sdpMLineIndex,
@@ -85,35 +121,7 @@ export default class Signal {
                     console.log("end of candidates.");
                 }
             };
-
-            if ('ontrack' in pc) {
-                pc.ontrack = (event) => {
-                    onStream(event.streams[0]);
-                };
-            } else {  // onaddstream() deprecated
-                pc.onaddstream = (event) => {
-                    onStream(event.stream);
-                };
-            }
-
-            pc.onremovestream = (event) => console.log("the stream has been removed: do your stuff now");
-            pc.ondatachannel =  (event) => console.log("a data channel is available: do your stuff with it");
-
-            if (stream) {
-                pc.addStream(stream);
-            }
-
-            /* kindly signal the remote peer that we would like to initiate a call */
-            const request = {
-                what: "call",
-                options: {
-                    force_hw_vcodec: false,
-                    vformat: 30, /* 30=640x480, 30 fps */
-                    trickle_ice: true
-                }
-            };
-            console.log("send message " + JSON.stringify(request));
-            ws.send(JSON.stringify(request));
+            //Signal.call(ws, rtcPeerConnection, stream, onStream);
         };
 
         ws.onmessage = (evt) => {
@@ -132,12 +140,12 @@ export default class Signal {
                             OfferToReceiveVideo: true
                         }
                     };
-                    pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(data)),
+                    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(data)),
                             function onRemoteSdpSuccess() {
                                 hasRemoteDesc = true;
                                 addIceCandidates();
-                                pc.createAnswer(function (sessionDescription) {
-                                    pc.setLocalDescription(sessionDescription);
+                                rtcPeerConnection.createAnswer(function (sessionDescription) {
+                                    rtcPeerConnection.setLocalDescription(sessionDescription);
                                     const request = {
                                         what: "answer",
                                         data: JSON.stringify(sessionDescription)
@@ -189,9 +197,9 @@ export default class Signal {
 
         ws.onclose = function (event) {
             console.log('socket closed with code: ' + event.code);
-            if (pc) {
-                pc.close();
-                pc = null;
+            if (rtcPeerConnection) {
+                rtcPeerConnection.close();
+                rtcPeerConnection = null;
                 ws = null;
             }
             if (onClose) {

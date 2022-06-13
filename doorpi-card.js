@@ -14,6 +14,7 @@ class DoorPiCard extends HTMLElement {
         this.initDoorbellStatus(hass);
         this.initDoorbell(hass);
         this.getCameraView().hass = hass;
+
     }
 
     setConfig(config) {
@@ -72,8 +73,7 @@ class DoorPiCard extends HTMLElement {
         <!--div class="version">${version}</div-->
         <div id="buttons" class='buttons'>
             <div class="ring-buttons">
-                <mwc-button dense id='bell-everywhere'><ha-icon class="mdc-button__icon" icon="mdi:bell-ring-outline"></ha-icon></mwc-button>
-                <mwc-button dense id='bell-firstfloor'><ha-icon class="mdc-button__icon" icon="mdi:bell-outline"></ha-icon></mwc-button>
+                <mwc-button dense id='bell-on'><ha-icon class="mdc-button__icon" icon="mdi:bell-ring-outline"></ha-icon></mwc-button>
                 <mwc-button dense id='bell-off'><ha-icon class="mdc-button__icon" icon="mdi:bell-off-outline"></ha-icon></mwc-button>
             </div>
             <mwc-button raised id='btn-open-door'>` + 'Open Door' + `</mwc-button>
@@ -117,38 +117,41 @@ class DoorPiCard extends HTMLElement {
         });
     }
 
-    makeCall() {
+    initiateConnection() {
         const address = this.config.doorpi.url;
         const wsurl = 'wss://' + address.substring(7, address.length) + '/stream/webrtc';
-
         const doorpiCard = this;
         const isFirefox = typeof InstallTrigger !== 'undefined';// Firefox 1.0+
         const localConstraints = {};
+
         localConstraints['audio'] = isFirefox ? {echoCancellation: true} : {optional: [{echoCancellation: true}]};
-        if (navigator.getUserMedia) {
-            navigator.getUserMedia(localConstraints, function (stream) {
-                let remoteAudio;
-                doorpiCard.audio_video_stream = stream;
-                doorpiCard.signalObj = new Signal(wsurl,
-                    stream,
-                    (doorbellStream) => {
-                        console.log('got a stream!');
-                        remoteAudio = document.createElement('audio');
-                        remoteAudio.srcObject = doorbellStream;
-                        remoteAudio.play();
-                        //var url = window.URL || window.webkitURL;
-                        //video.srcObject = stream;
-                        //video.play();
-                    },
-                    (error) => alert(error),
-                    () => {
-                        console.log('websocket closed. bye bye!');
-                        remoteAudio.srcObject = null;
-                        remoteAudio = null;
-                    },
-                    (message) => alert(message)
-                );
-            }, function (error) {
+        if (navigator.mediaDevices) {
+            navigator.mediaDevices.getUserMedia(localConstraints)
+                .then((stream) => {
+                    let remoteAudio;
+                    doorpiCard.audio_video_stream = stream;
+                    doorpiCard.signalObj = new Signal(wsurl,/*
+                        stream,
+                        (doorbellStream) => {
+                            console.log('got a stream!');
+                            remoteAudio = document.createElement('audio');
+                            remoteAudio.srcObject = doorbellStream;
+                            remoteAudio.play();
+                            //var url = window.URL || window.webkitURL;
+                            //video.srcObject = stream;
+                            //video.play();
+                        },
+                        */
+                        (error) => alert(error),
+                        () => {
+                            console.log('websocket closed. bye bye!');
+                            remoteAudio.srcObject = null;
+                            remoteAudio = null;
+                        },
+                        (message) => alert(message)
+                    )
+            })
+            .catch((error) => {
                 alert("An error has occurred. Check media device, permissions on media and origin.");
                 console.error(error);
                 stop();
@@ -157,6 +160,20 @@ class DoorPiCard extends HTMLElement {
             console.log("getUserMedia not supported");
         }
         this.buttons.classList.replace('doorbell-ringing', 'doorbell-talking');
+    }
+
+    makeCall() {
+        this.signalObj.call(this.audio_video_stream,
+            (doorbellStream) => {
+                console.log('got a stream!');
+                remoteAudio = document.createElement('audio');
+                remoteAudio.srcObject = doorbellStream;
+                remoteAudio.play();
+                //var url = window.URL || window.webkitURL;
+                //video.srcObject = stream;
+                //video.play();
+            }
+        )
     }
 
     terminateCall() {
@@ -168,28 +185,28 @@ class DoorPiCard extends HTMLElement {
     }
 
     initDoorbellStatus(hass) {
-        this.setupBellRingingButton(hass, 'everywhere', 'firstfloor');
-        this.setupBellRingingButton(hass, 'firstfloor', 'off');
-        this.setupBellRingingButton(hass, 'off', 'everywhere');
+        this.setupBellRingingButton(hass, 'on', 'off');
+        this.setupBellRingingButton(hass, 'off', 'on');
     }
 
     initDoorbell(hass) {
-        if(hass.states['input_boolean.doorbell'].state === 'off') {
-            this.buttons.classList.remove('doorbell-ringing', 'doorbell-talking');
-        } else if(hass.states['input_boolean.doorbell'].state === 'on' && !this.buttons.classList.contains('doorbell-talking')) {
-            this.buttons.classList.add('doorbell-ringing');
-        }
+        if(hass.states['input_select.doorbell'].state !== 'ring-off')
+            if(hass.states['input_boolean.doorbell'].state === 'off') {
+                this.buttons.classList.remove('doorbell-ringing', 'doorbell-talking');
+            } else if(hass.states['input_boolean.doorbell'].state === 'on' && !this.buttons.classList.contains('doorbell-talking')) {
+                this.buttons.classList.add('doorbell-ringing');
+            }
     }
 
-    setupBellRingingButton(hass, where, next) {
-        let btn = this.shadowRoot.querySelector(`#bell-${where}`);
+    setupBellRingingButton(hass, status, next_status) {
+        let btn = this.shadowRoot.querySelector(`#bell-${status}`);
 
-        if(hass.states['input_select.doorbell'].state == `ring-${where}`) {
+        if(hass.states['input_select.doorbell'].state == `ring-${status}`) {
             btn.style.display = 'inline-flex'; 
         } else {
             btn.style.display = 'none';
         }
-        btn.addEventListener('click', () => hass.callService('input_select', 'select_option', { entity_id: 'input_select.doorbell', option: `ring-${next}`}));
+        btn.addEventListener('click', () => hass.callService('input_select', 'select_option', { entity_id: 'input_select.doorbell', option: `ring-${next_status}`}));
     }
 
     cleanup(hass) {
