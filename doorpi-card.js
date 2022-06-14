@@ -5,6 +5,7 @@ class DoorPiCard extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
+        this.connectionEstablished = false;
     }
 
     set hass(hass) {
@@ -15,6 +16,9 @@ class DoorPiCard extends HTMLElement {
         this.initDoorbell(hass);
         this.getCameraView().hass = hass;
 
+        if(this.connectionNotInitiated()) {
+            this.initiateConnection();
+        }
     }
 
     setConfig(config) {
@@ -100,6 +104,10 @@ class DoorPiCard extends HTMLElement {
         return !this.signalObj && this.config;
     }
 
+    connectionNotInitiated() {
+        return !this.connectionEstablished;
+    }
+
     initEventListeners(hass) {
         console.log('Loading WebRTC');
         this.signalObj = {};
@@ -121,17 +129,27 @@ class DoorPiCard extends HTMLElement {
         const address = this.config.doorpi.url;
         const wsurl = 'wss://' + address.substring(7, address.length) + '/stream/webrtc';
         const doorpiCard = this;
-        const isFirefox = typeof InstallTrigger !== 'undefined';// Firefox 1.0+
-        const localConstraints = {};
+        
+        doorpiCard.signalObj = new Signal(wsurl,
+            (error) => alert(error),
+            () => {
+                console.log('websocket closed. bye bye!');
+                this.connectionEstablished = false;
+            },
+            (message) => alert(message)
+        );
+        this.connectionEstablished = true;
+    }
 
+    makeCall() {
+        const localConstraints = {};
+        const isFirefox = typeof InstallTrigger !== 'undefined';// Firefox 1.0+
+        
         localConstraints['audio'] = isFirefox ? {echoCancellation: true} : {optional: [{echoCancellation: true}]};
         if (navigator.mediaDevices) {
             navigator.mediaDevices.getUserMedia(localConstraints)
                 .then((stream) => {
-                    let remoteAudio;
-                    doorpiCard.audio_video_stream = stream;
-                    doorpiCard.signalObj = new Signal(wsurl,/*
-                        stream,
+                    this.signalObj.call(stream,
                         (doorbellStream) => {
                             console.log('got a stream!');
                             remoteAudio = document.createElement('audio');
@@ -140,47 +158,26 @@ class DoorPiCard extends HTMLElement {
                             //var url = window.URL || window.webkitURL;
                             //video.srcObject = stream;
                             //video.play();
-                        },
-                        */
-                        (error) => alert(error),
-                        () => {
-                            console.log('websocket closed. bye bye!');
-                            remoteAudio.srcObject = null;
-                            remoteAudio = null;
-                        },
-                        (message) => alert(message)
-                    )
-            })
-            .catch((error) => {
-                alert("An error has occurred. Check media device, permissions on media and origin.");
-                console.error(error);
-                stop();
-            });
+                        }
+                    );
+                })
+                .catch((error) => {
+                    alert("An error has occurred. Check media device, permissions on media and origin.");
+                    console.error(error);
+                    stop();
+                });
         } else {
             console.log("getUserMedia not supported");
         }
-        this.buttons.classList.replace('doorbell-ringing', 'doorbell-talking');
-    }
 
-    makeCall() {
-        this.signalObj.call(this.audio_video_stream,
-            (doorbellStream) => {
-                console.log('got a stream!');
-                remoteAudio = document.createElement('audio');
-                remoteAudio.srcObject = doorbellStream;
-                remoteAudio.play();
-                //var url = window.URL || window.webkitURL;
-                //video.srcObject = stream;
-                //video.play();
-            }
-        )
+        this.buttons.classList.replace('doorbell-ringing', 'doorbell-talking');
     }
 
     terminateCall() {
         if (this.signalObj) {
             console.log('Terminating call');
             this.signalObj.hangup();
-            this.signalObj = null;
+            //this.signalObj = null;
         }
     }
 

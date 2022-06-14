@@ -1,5 +1,5 @@
 export default class Signal {
-    constructor(url, /*stream, onStream,*/ onError, onClose, onMessage) {
+    constructor(url, onError, onClose, onMessage) {
         if (!"WebSocket" in window) {
             onError("Sorry, this browser does not support Web Sockets. Bye.");
             return;
@@ -17,7 +17,7 @@ export default class Signal {
 
         //this.localStream = stream;
         this.localStream = null;
-        this.ws = Signal.initWebSocket(url, this.pc, /*stream, onStream,*/ onError, onClose, onMessage);
+        this.ws = Signal.initWebSocket(url, this.pc, onError, onClose, onMessage);
     }
 
     call(stream, onStream) {
@@ -79,7 +79,7 @@ export default class Signal {
     };
 
 
-    static initWebSocket(url, rtcPeerConnection, /*stream, onStream,*/ onError, onClose, onMessage) {
+    static initWebSocket(url, rtcPeerConnection, onError, onClose, onMessage) {
         console.log("opening web socket: " + url);
         let ws = new WebSocket(url);
         let iceCandidates = [];
