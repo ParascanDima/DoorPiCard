@@ -14,11 +14,11 @@ class DoorPiCard extends HTMLElement {
         }
         this.initDoorbellStatus(hass);
         this.initDoorbell(hass);
-        this.getCameraView().hass = hass;
 
         if(this.connectionNotInitiated()) {
             this.initiateConnection();
         }
+        this.getCameraView().hass = hass;
     }
 
     setConfig(config) {

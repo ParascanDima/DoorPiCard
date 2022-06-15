@@ -42,16 +42,16 @@ export default class Signal {
         }
 
         /* kindly signal the remote peer that we would like to initiate a call */
-        const request = {
+        /*const request = {
             what: "call",
             options: {
                 force_hw_vcodec: false,
-                vformat: 30, /* 30=640x480, 30 fps */
+                vformat: 30, /* 30=640x480, 30 fps *
                 trickle_ice: true
             }
         };
         console.log("send message " + JSON.stringify(request));
-        this.ws.send(JSON.stringify(request));
+        this.ws.send(JSON.stringify(request)); */
     }
 
     hangup() {
@@ -121,6 +121,16 @@ export default class Signal {
                     console.log("end of candidates.");
                 }
             };
+            const request = {
+                what: "call",
+                options: {
+                    force_hw_vcodec: false,
+                    vformat: 30, /* 30=640x480, 30 fps */
+                    trickle_ice: true
+                }
+            };
+            //console.log("send message " + JSON.stringify(request));
+            ws.send(JSON.stringify(request));
             //Signal.call(ws, rtcPeerConnection, stream, onStream);
         };
 
@@ -210,6 +220,8 @@ export default class Signal {
         ws.onerror = function (event) {
             onError("An error has occurred on the websocket (make sure the address is correct)!");
         };
+
+        
 
         return ws;
     }
