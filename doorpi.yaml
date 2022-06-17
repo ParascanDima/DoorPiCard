@@ -28,8 +28,18 @@ automation:
         entity_id: binary_sensor.doorbell_button
         to: "on"
     action:
-      service: input_boolean.turn_on
-      entity_id: input_boolean.doorbell
+      - alias: "Turn ON"
+        service: input_boolean.turn_on
+        entity_id: input_boolean.doorbell
+      #- alias: "Open pop-up window with DoorPi card"
+      #  service: browser_mod.popup
+      #  data:
+      #    title: WTF
+      #    cards:
+      #      - type: custom:doorpi-card
+      #        camera_entity: camera.doorbell_camera
+      #        doorpi:
+      #          url: https://10.180.2.241:8080
   - alias: Doorbell rings!
     initial_state: true
     trigger:
@@ -39,8 +49,6 @@ automation:
     action:
       - service: script.turn_on
         entity_id: script.notify
-      - service: script.turn_on
-        entity_id: script.ring_on_sonos
   - alias: Doorbell rings but is off!
     initial_state: true
     condition:
@@ -87,63 +95,17 @@ automation:
 script:
   notify:
     sequence:
-      - event: browser_command
-        event_data:
-          command: navigate
-          navigation_path: /lovelace/1
-      - service: camera.snapshot
+      #- event: browser_command
+      #  event_data:
+      #    command: navigate
+      #    navigation_path: /lovelace/1
+      #- service: input_boolean.turn_off
+      #  entity_id: input_boolean.doorbell
+      - service: browser_mod.popup
         data:
-          entity_id: camera.doorbell_camera
-          filename: "/config/www/doorpi/doorbell-image.jpg"
-      - service: notify.html5
-        data_template:
-          title: Deurbel
-          message: There's someone at the door
-          data:
-            image: "https://homeassistant.dehuysser.be/local/doorpi/doorbell-image.jpg?{{now().second}}"
-            url: /lovelace/1
-            ttl: 1800
-            priority: high
-      - delay: "00:02:30"
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.doorbell
-  ring_on_sonos:
-    sequence:
-      - condition: template
-        value_template: "{{ not is_state('input_select.doorbell', 'ring-off') }}"
-      - alias: "Snapshot sonos"
-        service: sonos.snapshot
-        data:
-          with_group: true
-      - alias: "Pause media"
-        service: media_player.media_pause
-        data:
-          entity_id:
-            - "media_player.dining_room"
-            - "media_player.living_room"
-            - "media_player.badkamer"
-            - "media_player.den"
-      - alias: "Join sonos"
-        service: sonos.join
-        data_template:
-          master: media_player.dining_room
-          entity_id:
-            - "media_player.dining_room"
-            - "media_player.living_room"
-            - "{% if is_state('input_select.doorbell', 'ring-everywhere') %} media_player.badkamer {% else %} media_player.dining_room {% endif %}"
-            - "{% if is_state('input_select.doorbell', 'ring-everywhere') %} media_player.den {% else %} media_player.dining_room {% endif %}"
-      - alias: "Set Sonos volume"
-        service: media_player.volume_set
-        data_template:
-          entity_id:
-            - "media_player.dining_room"
-            - "media_player.living_room"
-            - "{% if is_state('input_select.doorbell', 'ring-everywhere') %} media_player.badkamer {% else %} media_player.dining_room {% endif %}"
-            - "{% if is_state('input_select.doorbell', 'ring-everywhere') %} media_player.den {% else %} media_player.dining_room {% endif %}"
-          volume_level: 0.4
-      - alias: "Play doorbell sound"
-        service: media_player.play_media
-        entity_id: media_player.dining_room
-        data:
-          media_content_id: https://homeassistant.dehuysser.be/local/doorbell.mp3
-          media_content_type: "music"
+          title: WTF
+          card:
+            type: custom:doorpi-card
+            camera_entity: camera.doorbell_camera
+            doorpi:
+              url: https://10.180.2.241:8080

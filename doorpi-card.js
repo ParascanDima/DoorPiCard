@@ -117,7 +117,7 @@ class DoorPiCard extends HTMLElement {
         let rejectCallBtn = this.removeEventListeners(this.getElementById('btn-reject-call'));
         let endCallBtn = this.removeEventListeners(this.getElementById('btn-end-call'));
 
-        acceptCallBtn.addEventListener('click', () => this.makeCall());
+        acceptCallBtn.addEventListener('click', () => this.makeCall(hass));
         rejectCallBtn.addEventListener('click',  () => {this.cleanup(hass);});
         endCallBtn.addEventListener('click', () => {
             this.terminateCall();
@@ -131,17 +131,17 @@ class DoorPiCard extends HTMLElement {
         const doorpiCard = this;
         
         doorpiCard.signalObj = new Signal(wsurl,
-            (error) => alert(error),
+            (error) => {},
             () => {
                 console.log('websocket closed. bye bye!');
                 this.connectionEstablished = false;
             },
-            (message) => alert(message)
+            (message) => {}
         );
         this.connectionEstablished = true;
     }
 
-    makeCall() {
+    makeCall(hass) {
         const localConstraints = {};
         const isFirefox = typeof InstallTrigger !== 'undefined';// Firefox 1.0+
         
@@ -171,6 +171,7 @@ class DoorPiCard extends HTMLElement {
         }
 
         this.buttons.classList.replace('doorbell-ringing', 'doorbell-talking');
+        hass.states['input_boolean.doorbell'].state = 'off';
     }
 
     terminateCall() {
