@@ -6,11 +6,13 @@ class DoorPiCard extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this.connectionEstablished = false;
+        this.connectionEnabled = true;
     }
 
     set hass(hass) {
         if(this.notYetInitialized()) {
             this.initEventListeners(hass);
+            this.getCameraView().hass = hass;
         }
         this.initDoorbellStatus(hass);
         this.initDoorbell(hass);
@@ -18,7 +20,6 @@ class DoorPiCard extends HTMLElement {
         if(this.connectionNotInitiated()) {
             this.initiateConnection();
         }
-        this.getCameraView().hass = hass;
     }
 
     setConfig(config) {
@@ -92,6 +93,11 @@ class DoorPiCard extends HTMLElement {
         root.appendChild(card);
 
         this.getCameraView().setConfig(config);
+        this.getCameraView().setOnStop(()=> {
+            if(this.signalObj.getConnectionStatus() === 1){
+                this.signalObj.closeConnection()
+            }
+        })
     }
 
     // The height of your card. Home Assistant uses this to automatically
@@ -105,7 +111,7 @@ class DoorPiCard extends HTMLElement {
     }
 
     connectionNotInitiated() {
-        return !this.connectionEstablished;
+        return !this.connectionEstablished && this.connectionEnabled;
     }
 
     initEventListeners(hass) {
@@ -127,14 +133,19 @@ class DoorPiCard extends HTMLElement {
 
     initiateConnection() {
         const address = this.config.doorpi.url;
-        const wsurl = 'wss://' + address.substring(7, address.length) + '/stream/webrtc';
+        const wsurl = 'wss://' + address.substring(7, address.length) + ':8888/webrtc';
         const doorpiCard = this;
         
+        this.connectionEnabled = false;
         doorpiCard.signalObj = new Signal(wsurl,
-            (error) => {},
+            (error) => {
+                console.log("Connection error");
+                this.connectionEnabled = false;
+            },
             () => {
                 console.log('websocket closed. bye bye!');
                 this.connectionEstablished = false;
+                //this.connectionEnabled = true;
             },
             (message) => {}
         );
@@ -152,6 +163,7 @@ class DoorPiCard extends HTMLElement {
                     this.signalObj.call(stream,
                         (doorbellStream) => {
                             console.log('got a stream!');
+                            console.log(doorbellStream.getTracks());
                             remoteAudio = document.createElement('audio');
                             remoteAudio.srcObject = doorbellStream;
                             remoteAudio.play();
@@ -177,6 +189,8 @@ class DoorPiCard extends HTMLElement {
     terminateCall() {
         if (this.signalObj) {
             console.log('Terminating call');
+            hass.states['input_boolean.doorbell'].state = 'off';
+            this.connectionEnabled = true;
             this.signalObj.hangup();
             //this.signalObj = null;
         }
@@ -209,7 +223,11 @@ class DoorPiCard extends HTMLElement {
 
     cleanup(hass) {
         this.buttons.classList.remove('doorbell-ringing', 'doorbell-talking');
-        setTimeout(() => hass.callService('input_boolean', 'turn_off', { entity_id: 'input_boolean.doorbell' }), 1000);
+        this.signalObj.hangup();
+        setTimeout(() => {
+            hass.callService('input_boolean', 'turn_off', { entity_id: 'input_boolean.doorbell' });
+            hass.callService('browser_mod', 'close_popup');
+            }, 1000);
     }
     
     getCameraView() {

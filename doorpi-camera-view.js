@@ -3,6 +3,8 @@ class DoorPiCameraView extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
+        this.isStopped = true;
+        this.onStop = () => {};
     }
 
     set hass(hass) {
@@ -20,10 +22,15 @@ class DoorPiCameraView extends HTMLElement {
         root.appendChild(content);
     }
 
+    setOnStop(onStopHandler){
+        this.onStop = onStopHandler;
+    }
+
     showCameraView(hass) {
         if(!this.cameraViewerShownInterval)
             this.cameraViewerShownInterval = window.setInterval(() => this.isDoorPiCameraViewNotShown() , 15000);
         const imgEl = this.getImgElement();
+        this.isStopped = false;
         // const camera_entity = this.config.camera_entity;
 
         // const old_access_token = this.access_token;
@@ -33,13 +40,15 @@ class DoorPiCameraView extends HTMLElement {
         //     this.access_token = hass.states[camera_entity].attributes['access_token'];
         //     imgEl.src = `/api/camera_proxy_stream/${camera_entity}?token=${this.access_token}`;
         // }
-        imgEl.src = this.config.doorpi.url + '/stream/video.mjpeg';
+        imgEl.src = this.config.doorpi.url + ':8080/stream/video.mjpeg';
     }
 
     isDoorPiCameraViewNotShown() {
         const imgEl = this.getImgElement();
-        if(!this.isVisible(imgEl)) {
+        if(!this.isVisible(imgEl) && !this.isStopped) {
             this.stopCameraStreaming();
+            this.isStopped = true;
+            this.onStop();
         }
     }
 

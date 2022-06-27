@@ -31,15 +31,6 @@ automation:
       - alias: "Turn ON"
         service: input_boolean.turn_on
         entity_id: input_boolean.doorbell
-      #- alias: "Open pop-up window with DoorPi card"
-      #  service: browser_mod.popup
-      #  data:
-      #    title: WTF
-      #    cards:
-      #      - type: custom:doorpi-card
-      #        camera_entity: camera.doorbell_camera
-      #        doorpi:
-      #          url: https://10.180.2.241:8080
   - alias: Doorbell rings!
     initial_state: true
     trigger:
@@ -95,17 +86,14 @@ automation:
 script:
   notify:
     sequence:
-      #- event: browser_command
-      #  event_data:
-      #    command: navigate
-      #    navigation_path: /lovelace/1
-      #- service: input_boolean.turn_off
-      #  entity_id: input_boolean.doorbell
       - service: browser_mod.popup
         data:
-          title: WTF
+          title: Someone is calling
+          hide_header: true
+          large: true
           card:
             type: custom:doorpi-card
             camera_entity: camera.doorbell_camera
             doorpi:
-              url: https://10.180.2.241:8080
+              url: https://10.180.2.241
+              #url: https://192.168.100.121

@@ -20,12 +20,21 @@ export default class Signal {
         this.ws = Signal.initWebSocket(url, this.pc, onError, onClose, onMessage);
     }
 
+    getConnectionStatus(){
+        return this.ws.readyState;
+    }
+
+    closeConnection(){
+        this.ws.close();
+    }
+
     call(stream, onStream) {
 
         this.localStream = stream;
 
         if ('ontrack' in this.pc) {
             this.pc.ontrack = (event) => {
+                console.log(event.streams)
                 onStream(event.streams[0]);
             };
         } else {  // onaddstream() deprecated
@@ -194,9 +203,9 @@ export default class Signal {
         };
 
         ws.onclose = function (event) {
-            console.log('socket closed with code: ' + event.code);
             if (rtcPeerConnection) {
                 rtcPeerConnection.close();
+                console.log('socket closed with code: ' + event.code);
                 rtcPeerConnection = null;
                 ws = null;
             }
