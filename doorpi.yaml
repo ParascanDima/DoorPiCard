@@ -20,6 +20,13 @@ input_select:
     initial: ring-on
     icon: mdi:bell-ring
 
+light:
+  #entity_id: doorbell_led_light
+  platform: mqtt
+  command_topic: "doorbell/rgb/switch"
+  rgb_command_topic: "doorbell/rgb/color"
+  name: Doorbell LED
+
 automation:
   - alias: Door knob pushed in
     initial_state: true
